@@ -29,7 +29,6 @@ public class WorkItemResource {
 
     private static final String ORGANIZATION = "InstantSoft";
     private static final String PROJECT = "Auditeste";
-    // hngbrmpcpmhxucaz3rqtg532ftz5vkearl4wocpkpyfjidpadgxa
     private static final String PAT = "";
     private static final String BASE_URL = "https://dev.azure.com/" + ORGANIZATION + "/" + PROJECT + "/_apis/wit/workitems/";
     String comment = "*** comment Test *** ";
