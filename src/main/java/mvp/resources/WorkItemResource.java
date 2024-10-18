@@ -17,6 +17,8 @@ import org.apache.http.util.EntityUtils;
 
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +31,9 @@ public class WorkItemResource {
 
     private static final String ORGANIZATION = "InstantSoft";
     private static final String PROJECT = "Auditeste";
-    private static final String PAT = System.getenv("AZURE_DEVOPS_PAT");
+
+    @ConfigProperty(name = "azure.devops.pat")
+    String PAT; //= System.getenv("AZURE_DEVOPS_PAT");
 
     private static final String BASE_URL = "https://dev.azure.com/" + ORGANIZATION + "/" + PROJECT + "/_apis/wit/workitems/";
     String comment = "*** comment Test *** ";
