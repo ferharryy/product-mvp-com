@@ -9,5 +9,3 @@ services:
       - "8080:8080"
     environment:
       - JAVA_OPTS=-Dquarkus.http.host=0.0.0.0
-      - AZURE_DEVOPS_PAT=tf6733urbsxnj6yohu4vvbbkgh4z6ekiby4dnksdr6amsijv77uq
-
