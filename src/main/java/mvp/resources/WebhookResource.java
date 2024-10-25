@@ -42,6 +42,96 @@ public class WebhookResource {
         return acceptedResponse;
     }
 
+    @POST
+    @Path("/comment")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response handleWebhookComment(String payload) {
+        // Responde rapidamente ao Azure DevOps
+        Response acceptedResponse = Response.accepted().build();
+
+        // Processa a carga útil em segundo plano
+        new Thread(() -> {
+            // Lógica para processar o webhook
+            processComment(payload);
+        }).start();
+
+        return acceptedResponse;
+    }
+
+    public Response processComment(String webhookPayload){
+        try {
+            // Converte a String JSON em JsonObject
+            JsonReader jsonReader = Json.createReader(new StringReader(webhookPayload));
+            JsonObject jsonObject = jsonReader.readObject();
+
+            // Verifica se é um evento de comentário (isso depende da estrutura do payload do Azure DevOps)
+            if (!jsonObject.containsKey("eventType") || !jsonObject.getString("eventType").equals("workitem.commented")) {
+                return Response.status(Response.Status.BAD_REQUEST).entity("Event is not a comment").build();
+            }
+
+            // Verifique se o comentário é de um usuário específico
+            String commenter = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.ChangedBy");
+            if (!commenter.equals("Fernando <marepositiva@hotmail.com>")) {
+                return Response.status(Response.Status.OK).entity("Comment is not from the specific user").build();
+            }
+
+            // Obter o comentário enviado no evento
+            String comment = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.History");
+            String cleanComment = removeHtmlTags(comment);
+
+            // Log do comentário
+            logger.info("Received comment: " + comment);
+
+            // Envia o comentário para o Ollama
+            OllamaChatResource chatResource = new OllamaChatResource();
+
+            // Criando o payload para o Ollama
+            JsonArrayBuilder messagesArrayBuilder = Json.createArrayBuilder()
+                    .add(Json.createObjectBuilder()
+                            .add("role", "user")
+                            .add("content", "Responda em portugues: " + cleanComment));
+
+            JsonObject chatPayloadObject = Json.createObjectBuilder()
+                    .add("model", "codellama")  // Define o modelo como "codellama"
+                    .add("messages", messagesArrayBuilder)
+                    .build();
+
+            String chatPayload = chatPayloadObject.toString();
+
+            // Chamando o Ollama para processar o comentário
+            Response chatResponse = chatResource.chat(chatPayload);
+            if (chatResponse.getStatus() != Response.Status.OK.getStatusCode()) {
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error in chat response").build();
+            }
+
+            // Processa a resposta do Ollama
+            String chatResponseBody = chatResponse.getEntity().toString();
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode chatJsonNode = mapper.readTree(chatResponseBody);
+            String chatContent = chatJsonNode.get("content").asText();
+
+            // Adiciona a resposta como um novo comentário ao work item
+            WorkItemResource workItemResource = new WorkItemResource();
+            JsonObject jsonComment = Json.createObjectBuilder().add("text", chatContent).build();
+            String commentPayload = jsonComment.toString();
+
+            int workItemId = jsonObject.getJsonObject("resource").getInt("id");
+            Response commentResponse = workItemResource.addComment(workItemId, commentPayload);
+
+            // Verifica se o comentário foi adicionado com sucesso
+            if (commentResponse.getStatus() == Response.Status.OK.getStatusCode()) {
+                return Response.ok("Response comment added successfully").build();
+            } else {
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Failed to add response comment").build();
+            }
+
+        } catch (Exception e) {
+            // Log do erro
+            logger.log(Level.SEVERE, "Error processing comment webhook", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error processing comment webhook").build();
+        }
+    }
+
     public Response processWebhook(String webhookPayload){
         try {
             // Converte a String JSON em JsonObject

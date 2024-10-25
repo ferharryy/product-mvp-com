@@ -30,7 +30,8 @@ public class OllamaChatResource {
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     public Response chat(String requestBody) {
-        String url = "http://host.docker.internal:11434/api/chat";  // Atualize a URL se necessário
+        //String url = "http://host.docker.internal:11434/api/chat";  // Atualize a URL se necessário
+        String url = "http://localhost:11434/api/chat";
 
         try (CloseableHttpClient client = HttpClients.createDefault()) {
             HttpPost request = new HttpPost(url);

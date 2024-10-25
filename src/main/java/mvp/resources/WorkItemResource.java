@@ -33,7 +33,7 @@ public class WorkItemResource {
     private static final String PROJECT = "Auditeste";
 
     @ConfigProperty(name = "azure.devops.pat")
-    String PAT; //= System.getenv("AZURE_DEVOPS_PAT");
+    String PAT = System.getenv("AZURE_DEVOPS_PAT");
 
     private static final String BASE_URL = "https://dev.azure.com/" + ORGANIZATION + "/" + PROJECT + "/_apis/wit/workitems/";
     String comment = "*** comment Test *** ";
