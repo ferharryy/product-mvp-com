@@ -91,7 +91,7 @@ public class WorkItemResource {
         JsonReader jsonReader = Json.createReader(new StringReader(comment));
         JsonObject jsonObject = jsonReader.readObject();
 
-        String comentario = jsonObject.getString("text");
+        String comentario = "comment IA " + jsonObject.getString("text");
 
         /*JsonArrayBuilder jsonPayloadObject = Json.createArrayBuilder()
                 .add(Json.createObjectBuilder()

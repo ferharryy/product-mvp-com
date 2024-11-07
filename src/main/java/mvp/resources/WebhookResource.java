@@ -1,5 +1,6 @@
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.inject.Inject;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
@@ -11,9 +12,11 @@ import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
 import mvp.resources.OllamaChatResource;
 import mvp.resources.WorkItemResource;
+import mvp.service.SupabaseService;
 import org.slf4j.LoggerFactory;
 
 import java.io.StringReader;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -24,6 +27,9 @@ public class WebhookResource {
 
     private static final Logger logger = Logger.getLogger(WebhookResource.class.getName());
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(WebhookResource.class);
+
+    @Inject
+    SupabaseService supabaseService;
 
     @POST
     @Path("/workitem")
@@ -82,14 +88,56 @@ public class WebhookResource {
             // Log do comentário
             logger.info("Received comment: " + comment);
 
+            int workItemId = jsonObject.getJsonObject("resource").getInt("id");
+            String title = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.Title");
+
+            // Cria o JSON para salvar no Supabase
+            JsonObject supabasePayload = Json.createObjectBuilder()
+                    .add("id_workitem", workItemId)
+                    .add("description", cleanComment)
+                    .add("title", title)
+                    .add("type", "comment")
+                    .build();
+
+            // Envia para o Supabase
+            Response responseSupabase = supabaseService.saveWorkItem(supabasePayload.toString());
+            if(responseSupabase.getStatus() != Response.Status.CREATED.getStatusCode()) {
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error in Supabase saveWorkItem response").build();
+            }
+
+
             // Envia o comentário para o Ollama
             OllamaChatResource chatResource = new OllamaChatResource();
 
+            String mensagemParaChat = "Agora sugira um workitem para este caso ";
+
+            JsonObject messageJson = Json.createObjectBuilder()
+                    .add("message", mensagemParaChat)
+                    .add("created_at", java.time.Instant.now().toString())
+                    .add("id_workitem", workItemId)
+                    .add("sender", "user")  // Indica que a mensagem veio do Ollama
+                    .build();
+
+            responseSupabase = supabaseService.saveMessage(messageJson.toString());
+            if(responseSupabase.getStatus() != Response.Status.CREATED.getStatusCode()){
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error in Supabase saveMessage user response").build();
+            }
             // Criando o payload para o Ollama
-            JsonArrayBuilder messagesArrayBuilder = Json.createArrayBuilder()
+            /*JsonArrayBuilder messagesArrayBuilder = Json.createArrayBuilder()
                     .add(Json.createObjectBuilder()
                             .add("role", "user")
-                            .add("content", "Responda em portugues: " + cleanComment));
+                            .add("content", "Agora sugira um workitem para este caso "));*/
+
+            // Recupera todas as mensagens associadas ao ID do Work Item
+            List<JsonObject> previousMessages = supabaseService.getMessagesByWorkItemId(workItemId);
+
+            // Monta o array de mensagens para o Ollama
+            JsonArrayBuilder messagesArrayBuilder = Json.createArrayBuilder();
+            for (JsonObject message : previousMessages) {
+                messagesArrayBuilder.add(Json.createObjectBuilder()
+                        .add("role", message.getString("sender"))
+                        .add("content", message.getString("message")));
+            }
 
             JsonObject chatPayloadObject = Json.createObjectBuilder()
                     .add("model", "codellama")  // Define o modelo como "codellama"
@@ -115,7 +163,20 @@ public class WebhookResource {
             JsonObject jsonComment = Json.createObjectBuilder().add("text", chatContent).build();
             String commentPayload = jsonComment.toString();
 
-            int workItemId = jsonObject.getJsonObject("resource").getInt("id");
+            messageJson = Json.createObjectBuilder()
+                    .add("message", chatContent)
+                    .add("created_at", java.time.Instant.now().toString())
+                    .add("id_workitem", workItemId)
+                    .add("sender", "assistant")  // Indica que a mensagem veio do Ollama
+                    .build();
+
+            // Salva a resposta no Supabase
+            responseSupabase = supabaseService.saveMessage(messageJson.toString());
+
+            if(responseSupabase.getStatus() != Response.Status.CREATED.getStatusCode()){
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error in Supabase saveMessage assistent response").build();
+            }
+
             Response commentResponse = workItemResource.addComment(workItemId, commentPayload);
 
             // Verifica se o comentário foi adicionado com sucesso
@@ -155,15 +216,49 @@ public class WebhookResource {
             // Log da descrição do Work Item
             logger.info("Work item description: " + workItemDescription);
 
+            // Extrai os campos do work item
+            String title = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.Title");
+            String type = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.WorkItemType");
+            int workItemId = jsonObject.getJsonObject("resource").getInt("id");
+
+            // Cria o JSON para salvar no Supabase
+            JsonObject supabasePayload = Json.createObjectBuilder()
+                    .add("id_workitem", workItemId)
+                    .add("description", workItemDescription)
+                    .add("title", title)
+                    .add("type", type)
+                    .build();
+
+            // Envia para o Supabase
+            Response responseSupabase = supabaseService.saveWorkItem(supabasePayload.toString());
+            if(responseSupabase.getStatus() != Response.Status.CREATED.getStatusCode()){
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error in Supabase saveWorkItem response").build();
+            }
+
+
             // Instância de OllamaChatResource
             OllamaChatResource chatResource = new OllamaChatResource();
+            String mensagemParaChat = "como product owner aponte falhas e problemas de análise do seguinte workitem " + workItemDescription;
 
             // Criando o payload para enviar ao OllamaChatResource
             JsonArrayBuilder messagesArrayBuilder = Json.createArrayBuilder()
                     .add(Json.createObjectBuilder()
                             .add("role", "user")
-                            .add("content", "como analista de qualidade crie os cenários de testes para a seguinte estoria usando cucumber " + workItemDescription)  // Adiciona a descrição do work item
+                            .add("content", mensagemParaChat)
                     );
+
+            JsonObject messageJson = Json.createObjectBuilder()
+                    .add("message", mensagemParaChat)
+                    .add("created_at", java.time.Instant.now().toString())
+                    .add("id_workitem", workItemId)
+                    .add("sender", "user")  // Indica que a mensagem veio do Ollama
+                    .build();
+
+            responseSupabase = supabaseService.saveMessage(messageJson.toString());
+
+            if(responseSupabase.getStatus() != Response.Status.CREATED.getStatusCode()){
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error in Supabase saveMessage user response").build();
+            }
 
             JsonObject chatPayloadObject = Json.createObjectBuilder()
                     .add("model", "codellama")  // Define o modelo como "codellama"
@@ -185,10 +280,24 @@ public class WebhookResource {
             JsonNode chatJsonNode = mapper.readTree(chatResponseBody);
             String chatContent = chatJsonNode.get("content").asText();
             JsonObject jsonComment = Json.createObjectBuilder().add("text", chatContent).build();
-            String commentPayload = jsonComment.toString();
+            String commentPayload = removeHtmlTags(jsonComment.toString());
 
             // Log da resposta do chat
             logger.info("Chat response: " + chatContent);
+
+            messageJson = Json.createObjectBuilder()
+                    .add("message", chatContent)
+                    .add("created_at", java.time.Instant.now().toString())
+                    .add("id_workitem", workItemId)
+                    .add("sender", "assistant")  // Indica que a mensagem veio do Ollama
+                    .build();
+
+            // Salva a resposta no Supabase
+            responseSupabase = supabaseService.saveMessage(messageJson.toString());
+
+            if(responseSupabase.getStatus() != Response.Status.CREATED.getStatusCode()){
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error in Supabase saveMessage assistent response").build();
+            }
 
             // Instância de WorkItemResource para adicionar comentário
             WorkItemResource workItemResource = new WorkItemResource();
