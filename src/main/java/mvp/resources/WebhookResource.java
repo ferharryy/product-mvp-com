@@ -70,8 +70,40 @@ public class WebhookResource {
             JsonReader jsonReader = Json.createReader(new StringReader(webhookPayload));
             JsonObject jsonObject = jsonReader.readObject();
 
+            int workItemId = jsonObject.getJsonObject("resource").getInt("id");
+            String title = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.Title");
+
+            // Obter o comentário enviado no evento
+            String comment = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.History");
+            String cleanComment = removeHtmlTags(comment);
+
+            // Chama o repositório para verificar se já existe uma interação final do assistente
+            JsonObject finalMessage = supabaseService.hasFinalAssistantMessage(workItemId);
+            int interaction = 0;
+            int interactionOrder = 0;
+
+            // Checa se o comentário contém as palavras "aceito" ou "recuso"
+            if (comment.toLowerCase().contains("aceito") || comment.toLowerCase().contains("recuso")) {
+                int interactionAux = finalMessage.getJsonNumber("interaction").intValue();
+                finalMessage = supabaseService.getNextInteraction(interactionAux);
+                if (finalMessage != null){
+                    interaction = finalMessage.getJsonNumber("interaction").intValue();
+                }
+                finalMessage = null;
+            }
+
+            if (finalMessage != null) {
+                /*if (finalMessage.getBoolean("is_final")){
+                    return null;
+                }*/
+                interaction = finalMessage.getJsonNumber("interaction").intValue();
+                interactionOrder = finalMessage.getJsonNumber("interaction_order").intValue();
+
+                logger.info("Final assistant message interaction: " + interaction);
+            }
+
             // Verifica se é um evento de comentário (isso depende da estrutura do payload do Azure DevOps)
-            if (!jsonObject.containsKey("eventType") || !jsonObject.getString("eventType").equals("workitem.commented")) {
+            /*if (!jsonObject.containsKey("eventType") || !jsonObject.getString("eventType").equals("workitem.commented")) {
                 return Response.status(Response.Status.BAD_REQUEST).entity("Event is not a comment").build();
             }
 
@@ -79,17 +111,10 @@ public class WebhookResource {
             String commenter = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.ChangedBy");
             if (!commenter.equals("Fernando <marepositiva@hotmail.com>")) {
                 return Response.status(Response.Status.OK).entity("Comment is not from the specific user").build();
-            }
-
-            // Obter o comentário enviado no evento
-            String comment = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.History");
-            String cleanComment = removeHtmlTags(comment);
+            }*/
 
             // Log do comentário
             logger.info("Received comment: " + comment);
-
-            int workItemId = jsonObject.getJsonObject("resource").getInt("id");
-            String title = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.Title");
 
             // Cria o JSON para salvar no Supabase
             JsonObject supabasePayload = Json.createObjectBuilder()
@@ -105,17 +130,24 @@ public class WebhookResource {
                 return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error in Supabase saveWorkItem response").build();
             }
 
+            String mensagemParaChat = "";
+            JsonObject nextInteractionData = supabaseService.getNextInteractionOrder(interaction, interactionOrder);
 
-            // Envia o comentário para o Ollama
-            OllamaChatResource chatResource = new OllamaChatResource();
-
-            String mensagemParaChat = "Agora sugira um workitem para este caso ";
+            if (nextInteractionData != null) {
+                mensagemParaChat = nextInteractionData.getJsonString("prompt").getString();
+                interaction = nextInteractionData.getJsonNumber("interaction").intValue();
+                interactionOrder = nextInteractionData.getJsonNumber("interaction_order").intValue();
+            }else {
+                return null;
+            }
 
             JsonObject messageJson = Json.createObjectBuilder()
                     .add("message", mensagemParaChat)
                     .add("created_at", java.time.Instant.now().toString())
                     .add("id_workitem", workItemId)
                     .add("sender", "user")  // Indica que a mensagem veio do Ollama
+                    .add("interaction_message_processing", interaction)
+                    .add("interaction_order", interactionOrder)
                     .build();
 
             responseSupabase = supabaseService.saveMessage(messageJson.toString());
@@ -145,6 +177,9 @@ public class WebhookResource {
                     .build();
 
             String chatPayload = chatPayloadObject.toString();
+
+            // Envia o comentário para o Ollama
+            OllamaChatResource chatResource = new OllamaChatResource();
 
             // Chamando o Ollama para processar o comentário
             Response chatResponse = chatResource.chat(chatPayload);
@@ -238,7 +273,16 @@ public class WebhookResource {
 
             // Instância de OllamaChatResource
             OllamaChatResource chatResource = new OllamaChatResource();
-            String mensagemParaChat = "como product owner aponte falhas e problemas de análise do seguinte workitem " + workItemDescription;
+            String mensagemParaChat = "";
+            int interaction = 1;
+            int interactionOrder = 0;
+            JsonObject nextInteractionData = supabaseService.getNextInteractionOrder(interaction, interactionOrder);
+
+            if (nextInteractionData != null) {
+                mensagemParaChat = nextInteractionData.getJsonString("prompt").getString() + workItemDescription;
+                interaction = nextInteractionData.getJsonNumber("interaction").intValue();
+                interactionOrder = nextInteractionData.getJsonNumber("interaction_order").intValue();
+            }
 
             // Criando o payload para enviar ao OllamaChatResource
             JsonArrayBuilder messagesArrayBuilder = Json.createArrayBuilder()
@@ -252,6 +296,8 @@ public class WebhookResource {
                     .add("created_at", java.time.Instant.now().toString())
                     .add("id_workitem", workItemId)
                     .add("sender", "user")  // Indica que a mensagem veio do Ollama
+                    .add("interaction_message_processing", interaction)
+                    .add("interaction_order", interactionOrder)
                     .build();
 
             responseSupabase = supabaseService.saveMessage(messageJson.toString());
