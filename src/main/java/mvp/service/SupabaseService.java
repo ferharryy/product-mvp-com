@@ -113,6 +113,7 @@ public class SupabaseService {
                 .add("prompt", message.getString("prompt"))
                 .add("interaction", message.getInt("interaction"))
                 .add("interaction_order", message.getInt("interaction_order"))
+                .add("is_final", message.getBoolean("is_final"))
                 .build();
     }
 }

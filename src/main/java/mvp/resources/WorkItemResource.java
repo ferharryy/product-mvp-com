@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.json.*;
 import jakarta.ws.rs.*;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.ClientBuilder;
+import jakarta.ws.rs.client.Entity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPatch;
@@ -210,5 +213,47 @@ public class WorkItemResource {
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Error occurred").build();
         }
     }
+
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response createTask(@PathParam("type") String type, String jsonPayload) {
+        String url = BASE_URL + "$" + type + "?api-version=6.0";
+
+        try (CloseableHttpClient client = HttpClients.createDefault()) {
+            HttpPost request = new HttpPost(url);
+            String authHeader = "Basic " + Base64.getEncoder().encodeToString((":" + PAT).getBytes());
+            request.setHeader("Authorization", authHeader);
+            request.setHeader("Content-Type", "application/json-patch+json");
+
+            // Configura o payload JSON
+            StringEntity entity = new StringEntity(jsonPayload, StandardCharsets.UTF_8);
+            request.setEntity(entity);
+
+            // Executa a requisição
+            try (CloseableHttpResponse response = client.execute(request)) {
+                int statusCode = response.getStatusLine().getStatusCode();
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+
+                if (statusCode == 200 || statusCode == 201) {
+                    // Parseia a resposta
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode jsonNode = mapper.readTree(responseBody);
+
+                    return Response.ok(jsonNode.toString()).build();
+                } else {
+                    // Retorna detalhes do erro
+                    return Response.status(statusCode)
+                            .entity("Failed to create task. Response: " + responseBody)
+                            .build();
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("Error occurred: " + e.getMessage())
+                    .build();
+        }
+    }
+
 
 }

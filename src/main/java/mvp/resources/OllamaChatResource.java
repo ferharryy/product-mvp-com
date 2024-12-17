@@ -45,7 +45,7 @@ public class OllamaChatResource {
                 int statusCode = response.getStatusLine().getStatusCode();
                 LOGGER.info("Resposta recebida com status: " + statusCode);
 
-                if (statusCode == 200) {
+                 if (statusCode == 200) {
                     String jsonResponse = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
                     //LOGGER.info("Resposta do Ollama: " + jsonResponse);
 

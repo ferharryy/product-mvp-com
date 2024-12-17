@@ -42,4 +42,9 @@ public class UtilsService {
         Response response = new WorkItemResource().addComment(workItemId, payload.toString());
         return response.getStatus() == Response.Status.OK.getStatusCode();
     }
+
+    public static boolean addTaskToWorkItem(String type, String payload){
+        Response response = new WorkItemResource().createTask(type, payload);
+        return response.getStatus() == Response.Status.OK.getStatusCode();
+    }
 }
