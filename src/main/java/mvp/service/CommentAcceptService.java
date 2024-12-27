@@ -93,11 +93,11 @@ public class CommentAcceptService {
                 return;
             }
 
-            if (!isFinal) {
-                if (!SupabaseUtils.saveAssistantMessage(workItemId, assistantResponse, interaction, interactionOrder)) {
-                    return;
-                }
+            if (!SupabaseUtils.saveAssistantMessage(workItemId, assistantResponse, interaction, interactionOrder)) {
+                return;
+            }
 
+            if (!isFinal) {
                 if (!UtilsService.addCommentToWorkItem(workItemId, assistantResponse)) {
                     return;
                 }
