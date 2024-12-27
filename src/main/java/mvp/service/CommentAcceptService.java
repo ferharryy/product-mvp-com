@@ -128,13 +128,18 @@ public class CommentAcceptService {
             logger.info("entrou no generarteTaskPayloadsFromJson");
             JsonNode rootNode = mapper.readTree(ollamaJson);
 
-            /*if (ollamaJson.contains("atividades")){
-                JsonNode activities = rootNode.get("atividades");
-                rootNode = activities;
-            }else if (ollamaJson.contains("Atividades")){
-                JsonNode activities = rootNode.get("Atividades");
-                rootNode = activities;
-            }*/
+            // Normalizar o JSON para lidar com diferentes formatos
+            JsonNode tasksNode;
+            if (rootNode.isArray()) {
+                // Formato simples: lista de objetos
+                tasksNode = rootNode;
+            } else if (rootNode.has("atividades")) {
+                // Formato com chave "atividades"
+                tasksNode = rootNode.get("atividades");
+            } else {
+                logger.error("Formato de JSON não reconhecido");
+                return payloads; // Retorna vazio se o formato for inesperado
+            }
 
             for (JsonNode task : rootNode) {
                 logger.info("valor task: " + task);
@@ -162,45 +167,11 @@ public class CommentAcceptService {
                 payloads.add(payload);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error(e.getMessage());
         }
 
         return payloads;
     }
-    public List<String> generateTaskPayloads(String ollamaResponse, String iterationPath, String epicUrl) {
-        List<String> payloads = new ArrayList<>();
-        String[] parts = ollamaResponse.split(";");
-
-        for (int i = 0; i < parts.length; i += 2) {
-            if (i + 1 < parts.length) {
-                String title = parts[i].trim();
-                String description = parts[i + 1].trim();
-
-                String payload = "["
-                        + "{"
-                        + "\"op\": \"add\", \"path\": \"/fields/System.Title\", \"value\": \"" + title + "\""
-                        + "},"
-                        + "{"
-                        + "\"op\": \"add\", \"path\": \"/fields/System.Description\", \"value\": \"" + description + "\""
-                        + "},"
-                        + "{"
-                        + "\"op\": \"add\", \"path\": \"/fields/System.IterationPath\", \"value\": \"" + iterationPath + "\""
-                        + "},"
-                        + "{"
-                        + "\"op\": \"add\", \"path\": \"/relations/-\", \"value\": {"
-                        + "\"rel\": \"System.LinkTypes.Hierarchy-Reverse\","
-                        + "\"url\": \"" + epicUrl + "\","
-                        + "\"attributes\": {\"comment\": \"Linkado ao Epic correspondente\"}"
-                        + "}}"
-                        + "]";
-
-                payloads.add(payload);
-            }
-        }
-        return payloads;
-    }
-
-
 
     private <T> T getNestedJsonValue(JsonObject json, String[] keys, Class<T> valueType) {
         try {
