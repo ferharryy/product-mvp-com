@@ -37,6 +37,7 @@ public class CommentAcceptService {
             String title =  getNestedJsonValue(payload, keysTitle, String.class);
             String[] keysComment = {"resource", "fields", "System.History"};
             String comment = getNestedJsonValue(payload, keysComment, String.class);
+            logger.info("Chegou comentario id: " + workItemId);
 
             if (workItemId == -1 || title == null || comment == null) {
                 return;
@@ -109,6 +110,7 @@ public class CommentAcceptService {
 
             List<String> taskPayloads = generateTaskPayloadsFromJson(assistantResponse, iterationPath, epicUrl);
 
+            logger.info("json " + taskPayloads);
             for (String payloadTask : taskPayloads) {
                 UtilsService.addTaskToWorkItem("Task", payloadTask);
             }
@@ -123,17 +125,19 @@ public class CommentAcceptService {
         ObjectMapper mapper = new ObjectMapper();
 
         try {
+            logger.info("entrou no generarteTaskPayloadsFromJson");
             JsonNode rootNode = mapper.readTree(ollamaJson);
 
-            if (ollamaJson.contains("atividades")){
+            /*if (ollamaJson.contains("atividades")){
                 JsonNode activities = rootNode.get("atividades");
                 rootNode = activities;
             }else if (ollamaJson.contains("Atividades")){
                 JsonNode activities = rootNode.get("Atividades");
                 rootNode = activities;
-            }
+            }*/
 
             for (JsonNode task : rootNode) {
+                logger.info("valor task: " + task);
                 String title = task.get("titulo").asText();
                 String description = task.get("descricao").asText();
 
