@@ -109,16 +109,23 @@ public class CommentAcceptService {
             String iterationPath = "Auditeste";
             String epicUrl = "https://dev.azure.com/InstantSoft/Auditeste/_apis/wit/workItems/" + workItemId;
 
-            CompletableFuture<List<String>> taskPayloadFuture = CompletableFuture.supplyAsync(() ->
-                    generateTaskPayloadsFromJson(assistantResponse, iterationPath, epicUrl)
-            );
+            /*List<String> taskPayloads = generateTaskPayloadsFromJson(assistantResponse, iterationPath, epicUrl);
+            Thread.sleep(2000);
 
-            List<String> taskPayloads = taskPayloadFuture.join(); // Bloqueia até concluir
             logger.info("JSON processado: " + taskPayloads);
-
             for (String payloadTask : taskPayloads) {
                 UtilsService.addTaskToWorkItem("Task", payloadTask);
-            }
+            }*/
+
+            CompletableFuture.supplyAsync(() ->
+                    generateTaskPayloadsFromJson(assistantResponse, iterationPath, epicUrl)
+            ).thenAccept(taskPayloads -> {
+                logger.info("JSON processado: " + taskPayloads);
+                taskPayloads.forEach(payloadTask -> UtilsService.addTaskToWorkItem("Task", payloadTask));
+            }).exceptionally(ex -> {
+                logger.error("Erro ao processar JSON", ex);
+                return null;
+            });
 
         } catch (Exception e) {
             logger.error(e.getMessage());
@@ -141,6 +148,15 @@ public class CommentAcceptService {
             } else if (rootNode.has("atividades")) {
                 // Formato com chave "atividades"
                 tasksNode = rootNode.get("atividades");
+            } else if (rootNode.has("Atividades")) {
+                    // Formato com chave "atividades"
+                    tasksNode = rootNode.get("Atividades");
+            } else if (rootNode.has("activities")) {
+                // Formato com chave "activities"
+                tasksNode = rootNode.get("activities");
+            } else if (rootNode.has("Activities")) {
+                // Formato com chave "activities"
+                tasksNode = rootNode.get("Activities");
             } else {
                 logger.error("Formato de JSON não reconhecido");
                 return payloads; // Retorna vazio se o formato for inesperado
