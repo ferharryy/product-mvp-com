@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @ApplicationScoped
 public class CommentAcceptService {
@@ -108,9 +109,13 @@ public class CommentAcceptService {
             String iterationPath = "Auditeste";
             String epicUrl = "https://dev.azure.com/InstantSoft/Auditeste/_apis/wit/workItems/" + workItemId;
 
-            List<String> taskPayloads = generateTaskPayloadsFromJson(assistantResponse, iterationPath, epicUrl);
+            CompletableFuture<List<String>> taskPayloadFuture = CompletableFuture.supplyAsync(() ->
+                    generateTaskPayloadsFromJson(assistantResponse, iterationPath, epicUrl)
+            );
 
-            logger.info("json " + taskPayloads);
+            List<String> taskPayloads = taskPayloadFuture.join(); // Bloqueia até concluir
+            logger.info("JSON processado: " + taskPayloads);
+
             for (String payloadTask : taskPayloads) {
                 UtilsService.addTaskToWorkItem("Task", payloadTask);
             }
