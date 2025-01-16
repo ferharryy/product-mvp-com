@@ -144,19 +144,19 @@ public class CommentAcceptService {
             JsonNode tasksNode;
             if (rootNode.isArray()) {
                 // Formato simples: lista de objetos
-                tasksNode = rootNode;
+                rootNode = rootNode;
             } else if (rootNode.has("atividades")) {
                 // Formato com chave "atividades"
-                tasksNode = rootNode.get("atividades");
+                rootNode = rootNode.get("atividades");
             } else if (rootNode.has("Atividades")) {
-                    // Formato com chave "atividades"
-                    tasksNode = rootNode.get("Atividades");
+                // Formato com chave "atividades"
+                rootNode = rootNode.get("Atividades");
             } else if (rootNode.has("activities")) {
                 // Formato com chave "activities"
-                tasksNode = rootNode.get("activities");
+                rootNode = rootNode.get("activities");
             } else if (rootNode.has("Activities")) {
                 // Formato com chave "activities"
-                tasksNode = rootNode.get("Activities");
+                rootNode = rootNode.get("Activities");
             } else {
                 logger.error("Formato de JSON não reconhecido");
                 return payloads; // Retorna vazio se o formato for inesperado
