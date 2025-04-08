@@ -24,11 +24,6 @@ import java.util.Base64;
 @Path("/jira")
 public class JiraResource {
 
-    //private static final String JIRA_API_URL = "https://instantsofttechsolution.atlassian.net/rest/api/3/issue";
-    //private static final String USER_EMAIL = "marepositiva@hotmail.com";
-    //private static final String API_TOKEN = "ATATT3xFfGF0zBL5yTMGGfdrx9QC05GzorFV5aNiuUMTbgIGginjsD8S_nDEljcuoenlh7PF3l1v1ffeRI4mJFWmCX3gU0BjUEZDVhcWbNsje8aM3pXPzYdghAWPZiY_MK5gWKMbXFUaVeQwDsb6UKuuJFJBYJySK7WaNUQw0MLiB85CnXTCu68=6CB78884";
-
-
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     public Response createIssue(String payload, String url, String user_email, String pat_token) {

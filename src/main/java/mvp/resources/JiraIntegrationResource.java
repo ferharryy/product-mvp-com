@@ -20,15 +20,9 @@ import jakarta.ws.rs.core.Response.Status;
 @Path("/jira")
 public class JiraIntegrationResource {
 
-    private static final String JIRA_API_URL = "https://instantsofttechsolution.atlassian.net/rest/api/3/issue";
-    private static final String USER_EMAIL = "marepositiva@hotmail.com";
-    private static final String API_TOKEN = "ATATT3xFfGF0zBL5yTMGGfdrx9QC05GzorFV5aNiuUMTbgIGginjsD8S_nDEljcuoenlh7PF3l1v1ffeRI4mJFWmCX3gU0BjUEZDVhcWbNsje8aM3pXPzYdghAWPZiY_MK5gWKMbXFUaVeQwDsb6UKuuJFJBYJySK7WaNUQw0MLiB85CnXTCu68=6CB78884";
-
-    @POST
-    @Path("/createIssue")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response createJiraIssue(String webhookPayload) {
+    public Response createJiraIssue(String webhookPayload, String url, String token_pat, String email) {
         try{
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(webhookPayload);
@@ -65,9 +59,9 @@ public class JiraIntegrationResource {
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
             Client client = ClientBuilder.newClient();
-            Response response = client.target(JIRA_API_URL)
+            Response response = client.target(url)
                     .request(MediaType.APPLICATION_JSON)
-                    .header("Authorization", "Basic " + getAuthHeader())
+                    .header("Authorization", "Basic " + getAuthHeader(email, token_pat))
                     .post(Entity.json(issue));
 
             if (response.getStatus() == Status.CREATED.getStatusCode()) {
@@ -81,8 +75,8 @@ public class JiraIntegrationResource {
         }
     }
 
-    private String getAuthHeader() {
-        String auth = USER_EMAIL + ":" + API_TOKEN;
+    private String getAuthHeader(String email, String token_pat) {
+        String auth = email + ":" + token_pat;
         return java.util.Base64.getEncoder().encodeToString(auth.getBytes());
     }
 
