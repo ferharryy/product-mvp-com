@@ -29,23 +29,10 @@ public class WorkItemService {
     @Inject
     SupabaseUtils supabaseUtils;  // Usando a nova classe utilitária
 
-    public Response processWebhook(String webhookPayload) {
+    public Response processWebhook(String workItemId, String title, String description, String plataform, String url) {
         try {
             // Parse do JSON recebido
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode rootNode = mapper.readTree(webhookPayload);
 
-            // Validação dos campos obrigatórios
-            if (!rootNode.has("resource") || !rootNode.get("resource").has("fields")) {
-                return Response.status(Response.Status.BAD_REQUEST).entity("Invalid payload structure").build();
-            }
-
-            // Extrai informações do payload
-            JsonNode fields = rootNode.get("resource").get("fields");
-            String description = UtilsService.removeHtmlTags(fields.get("System.Description").asText());
-            String title = fields.get("System.Title").asText();
-            String type = fields.get("System.WorkItemType").asText();
-            int workItemId = rootNode.get("resource").get("id").asInt();
 
             logger.info("Processing Work Item: ID={}, Title={}", workItemId, title);
 
@@ -86,7 +73,9 @@ public class WorkItemService {
                 return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Failed to save assistant message").build();
             }
 
-            if (!UtilsService.addCommentToWorkItem(workItemId, assistantResponse)) {
+            if (plataform.equals("0") && !UtilsService.addCommentToJira(workItemId, assistantResponse, url)){
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Failed to add comment to work item").build();
+            }else if (!UtilsService.addCommentToWorkItem(workItemId, assistantResponse)) {
                 return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Failed to add comment to work item").build();
             }
 

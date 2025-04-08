@@ -89,7 +89,7 @@ public class WorkItemResource {
     @Path("/{id}/comments")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response addComment(@PathParam("id") int id, String comment) {
+    public Response addComment(@PathParam("id") String id, String comment) {
         String url = BASE_URL + id + "?api-version=6.0";
         JsonReader jsonReader = Json.createReader(new StringReader(comment));
         JsonObject jsonObject = jsonReader.readObject();

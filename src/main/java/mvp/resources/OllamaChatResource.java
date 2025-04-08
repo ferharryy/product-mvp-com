@@ -47,7 +47,7 @@ public class OllamaChatResource {
 
                  if (statusCode == 200) {
                     String jsonResponse = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-                    //LOGGER.info("Resposta do Ollama: " + jsonResponse);
+                    LOGGER.info("Resposta do Ollama: " + jsonResponse);
 
                     // Use Jackson para processar o JSON
                     ObjectMapper mapper = new ObjectMapper();

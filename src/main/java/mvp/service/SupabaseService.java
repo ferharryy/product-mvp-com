@@ -10,6 +10,7 @@ import jakarta.ws.rs.client.Entity;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.logging.Logger;
 public class SupabaseService {
 
     private static final Logger LOGGER = Logger.getLogger(SupabaseService.class.getName());
+    private static final org.slf4j.Logger log = LoggerFactory.getLogger(SupabaseService.class);
 
     //@ConfigProperty(name = "supabase.url", defaultValue = "https://retvgrkwnakvbruzjcxn.supabase.co")
     String supabaseUrl = "https://retvgrkwnakvbruzjcxn.supabase.co";
@@ -64,7 +66,7 @@ public class SupabaseService {
         return sendPostRequest(supabaseUrl + "/rest/v1/work_item", workItemJson);
     }
 
-    public List<JsonObject> getMessagesByWorkItemId(int workItemId) {
+    public List<JsonObject> getMessagesByWorkItemId(String workItemId) {
         String url = supabaseUrl + "/rest/v1/messages?id_workitem=eq." + workItemId + "&order=id";
         JsonArray jsonArray = sendGetRequest(url);
         List<JsonObject> messages = new ArrayList<>();
@@ -74,7 +76,7 @@ public class SupabaseService {
         return messages;
     }
 
-    public JsonObject hasFinalAssistantMessage(int workItemId) {
+    public JsonObject hasFinalAssistantMessage(String workItemId) {
         String url = supabaseUrl + "/rest/v1/final_assistant_messages?id_workitem=eq." + workItemId + "&order=interaction.desc,interaction_order.desc&limit=1";
         JsonArray jsonArray = sendGetRequest(url);
         if (jsonArray.isEmpty()) {
@@ -114,6 +116,19 @@ public class SupabaseService {
                 .add("interaction", message.getInt("interaction"))
                 .add("interaction_order", message.getInt("interaction_order"))
                 .add("is_final", message.getBoolean("is_final"))
+                .build();
+    }
+
+    public JsonObject getPatAndUrlFromUser(String key, String urlBase){
+        String url = supabaseUrl + "/rest/v1/project_pat_view?project_key=eq." + key + "&url=eq." + urlBase;
+        JsonArray jsonArray = sendGetRequest(url);
+        if (jsonArray.isEmpty()){
+            return null;
+        }
+        JsonObject message = jsonArray.getJsonObject(0);
+        return Json.createObjectBuilder()
+                .add("email", message.getString("email"))
+                .add("pat_token", message.getString("pat_token"))
                 .build();
     }
 }

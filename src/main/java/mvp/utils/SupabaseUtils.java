@@ -14,7 +14,7 @@ public class SupabaseUtils {
     private static final SupabaseService supabaseService = new SupabaseService();
 
     // Método para salvar WorkItem
-    public static boolean saveWorkItem(int workItemId, String title, String description) {
+    public static boolean saveWorkItem(String workItemId, String title, String description) {
         JsonObject payload = Json.createObjectBuilder()
                 .add("id_workitem", workItemId)
                 .add("description", description)
@@ -43,15 +43,15 @@ public class SupabaseUtils {
     }
 
     // Método para verificar se já existe uma mensagem final do assistente
-    public static JsonObject hasFinalAssistantMessage(int workItemId) {
+    public static JsonObject hasFinalAssistantMessage(String workItemId) {
         return supabaseService.hasFinalAssistantMessage(workItemId);
     }
 
-    public static List<JsonObject> getMessagesByWorkItemId(int workItemId){
+    public static List<JsonObject> getMessagesByWorkItemId(String workItemId){
         return supabaseService.getMessagesByWorkItemId(workItemId);
     }
 
-    public static boolean saveUserMessage(int workItemId, String message, int interaction, int interactionOrder) {
+    public static boolean saveUserMessage(String workItemId, String message, int interaction, int interactionOrder) {
         JsonObject payload = Json.createObjectBuilder()
                 .add("message", message)
                 .add("created_at", java.time.Instant.now().toString())
@@ -65,7 +65,7 @@ public class SupabaseUtils {
         return response.getStatus() == Response.Status.CREATED.getStatusCode();
     }
 
-    public static boolean saveAssistantMessage(int workItemId, String message, int interaction, int interactionOrder) {
+    public static boolean saveAssistantMessage(String workItemId, String message, int interaction, int interactionOrder) {
         JsonObject payload = Json.createObjectBuilder()
                 .add("message", message)
                 .add("created_at", java.time.Instant.now().toString())

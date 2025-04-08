@@ -1,5 +1,7 @@
 package mvp.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -8,6 +10,7 @@ import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
+import mvp.resources.JiraResource;
 import mvp.utils.OllamaUtils;
 import mvp.utils.SupabaseUtils;
 import mvp.utils.UtilsService;
@@ -26,24 +29,8 @@ public class CommentAcceptService {
     @Inject
     OllamaUtils ollamaUtils;
 
-    public void processComment(String webhookPayload) {
+    public void processComment(String workItemId, String comment, String plataform, String url) {
         try {
-            JsonObject payload = UtilsService.parsePayload(webhookPayload);
-            if (payload == null) {
-                return;
-            }
-
-            int workItemId = getJsonValue(payload, "resource.id", Integer.class);
-            String[] keysTitle = {"resource", "fields", "System.Title"};
-            String title =  getNestedJsonValue(payload, keysTitle, String.class);
-            String[] keysComment = {"resource", "fields", "System.History"};
-            String comment = getNestedJsonValue(payload, keysComment, String.class);
-            logger.info("Chegou comentario id: " + workItemId);
-
-            if (workItemId == -1 || title == null || comment == null) {
-                return;
-            }
-
             JsonObject finalMessage = SupabaseUtils.hasFinalAssistantMessage(workItemId);
             int interaction = 0;
             int interactionOrder = 0;
@@ -100,22 +87,31 @@ public class CommentAcceptService {
             }
 
             if (!isFinal) {
-                if (!UtilsService.addCommentToWorkItem(workItemId, assistantResponse)) {
-                    return;
+
+                if (plataform.equals("0")){
+
+                    UtilsService.addCommentToJira(workItemId,assistantResponse, url);
+                } else if (plataform.equals("1")) {
+                    UtilsService.addCommentToWorkItem(workItemId, assistantResponse);
                 }
                 return;
             }
 
+
+            if (plataform.equals("0")) {
+                String iterantionPath = workItemId.split("-")[0];
+
+                CompletableFuture.supplyAsync(() ->
+                        generateTaskPayloadsFromJsonToJira(assistantResponse, iterantionPath)
+                ).thenAccept(taskPaloads -> {
+                    taskPaloads.forEach(payloadTask -> UtilsService.addTaskToJira(payloadTask, iterantionPath, url));
+            }).exceptionally(ex -> {
+                logger.error("Erro ao processar JSON", ex);
+                return null;
+                });
+            }else {
             String iterationPath = "Auditeste";
             String epicUrl = "https://dev.azure.com/InstantSoft/Auditeste/_apis/wit/workItems/" + workItemId;
-
-            /*List<String> taskPayloads = generateTaskPayloadsFromJson(assistantResponse, iterationPath, epicUrl);
-            Thread.sleep(2000);
-
-            logger.info("JSON processado: " + taskPayloads);
-            for (String payloadTask : taskPayloads) {
-                UtilsService.addTaskToWorkItem("Task", payloadTask);
-            }*/
 
             CompletableFuture.supplyAsync(() ->
                     generateTaskPayloadsFromJson(assistantResponse, iterationPath, epicUrl)
@@ -126,6 +122,8 @@ public class CommentAcceptService {
                 logger.error("Erro ao processar JSON", ex);
                 return null;
             });
+            }
+
 
         } catch (Exception e) {
             logger.error(e.getMessage());
@@ -194,77 +192,71 @@ public class CommentAcceptService {
         return payloads;
     }
 
-    private <T> T getNestedJsonValue(JsonObject json, String[] keys, Class<T> valueType) {
+    private List<String> generateTaskPayloadsFromJsonToJira(String ollamaJson, String iterationPath) {
+        List<String> payloads = new ArrayList<>();
+        ObjectMapper mapper = new ObjectMapper();
+
         try {
-            JsonObject temp = json;
-            // Percorre os níveis até o penúltimo
-            for (int i = 0; i < keys.length - 1; i++) {
-                temp = temp.getJsonObject(keys[i]);
-                if (temp == null) {
-                    throw new IllegalArgumentException("Invalid key: " + keys[i]);
-                }
-            }
-            // Pega o valor final
-            String finalKey = keys[keys.length - 1];
-            if (!temp.containsKey(finalKey)) {
-                throw new IllegalArgumentException("Invalid key: " + finalKey);
-            }
-            if (valueType == String.class) {
-                return valueType.cast(temp.getString(finalKey, null));
-            } else if (valueType == Integer.class) {
-                return valueType.cast(temp.getInt(finalKey, -1));
-            } else if (valueType == Boolean.class) {
-                return valueType.cast(temp.getBoolean(finalKey, false));
-            } else if (valueType == JsonObject.class) {
-                return valueType.cast(temp.getJsonObject(finalKey));
+            logger.info("entrou no generateTaskPayloadsFromJsonToJira");
+            JsonNode rootNode = mapper.readTree(ollamaJson);
+
+            // Normalizar o JSON para lidar com diferentes formatos
+            JsonNode tasksNode;
+            if (rootNode.isArray()) {
+                // Formato simples: lista de objetos
+                rootNode = rootNode;
+            } else if (rootNode.has("atividades")) {
+                // Formato com chave "atividades"
+                rootNode = rootNode.get("atividades");
+            } else if (rootNode.has("Atividades")) {
+                // Formato com chave "atividades"
+                rootNode = rootNode.get("Atividades");
+            } else if (rootNode.has("activities")) {
+                // Formato com chave "activities"
+                rootNode = rootNode.get("activities");
+            } else if (rootNode.has("Activities")) {
+                // Formato com chave "activities"
+                rootNode = rootNode.get("Activities");
             } else {
-                throw new IllegalArgumentException("Unsupported value type: " + valueType.getName());
+                logger.error("Formato de JSON não reconhecido");
+                return payloads; // Retorna vazio se o formato for inesperado
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
 
-    private <T> T getJsonValue(JsonObject json, String path, Class<T> valueType) {
-        try {
-            // Processa o caminho diretamente, sem dividir no ponto
-            String[] keys = path.split("\\.");
-            JsonObject temp = json;
+            for (JsonNode task : rootNode) {
+                logger.info("valor task: " + task);
+                String title = task.get("titulo").asText();
+                String description = task.get("descricao").asText();
 
-            for (int i = 0; i < keys.length; i++) {
-                String currentKey = keys[i];
+                String payload = "{\n" +
+                        "  \"fields\": {\n" +
+                        "    \"project\": {\n" +
+                        "      \"key\": \"" + iterationPath + "\"\n" +
+                        "    },\n" +
+                        "    \"summary\": \"" + title + "\",\n" +
+                        "    \"description\": {\n" +
+                        "      \"type\": \"doc\",\n" +
+                        "      \"version\": 1,\n" +
+                        "      \"content\": [{\n" +
+                        "        \"type\": \"paragraph\",\n" +
+                        "        \"content\": [{\n" +
+                        "          \"type\": \"text\",\n" +
+                        "          \"text\": \"" + description +"\"\n" +
+                        "        }]\n" +
+                        "      }]\n" +
+                        "    },\n" +
+                        "    \"issuetype\": {\n" +
+                        "      \"name\": \"Task\"\n" +
+                        "    }\n" +
+                        "  }\n" +
+                        "}";
 
-                // Para a última chave, retorna o valor diretamente
-                if (i == keys.length - 1) {
-                    if (!temp.containsKey(currentKey)) {
-                        throw new IllegalArgumentException("Invalid path: " + currentKey);
-                    }
-
-                    if (valueType == String.class) {
-                        return valueType.cast(temp.getString(currentKey, null));
-                    } else if (valueType == Integer.class) {
-                        return valueType.cast(temp.getInt(currentKey, -1));
-                    } else if (valueType == Double.class) {
-                        return valueType.cast(temp.getJsonNumber(currentKey).doubleValue());
-                    } else if (valueType == Boolean.class) {
-                        return valueType.cast(temp.getBoolean(currentKey, false));
-                    } else if (valueType == JsonObject.class) {
-                        return valueType.cast(temp.getJsonObject(currentKey));
-                    } else {
-                        throw new IllegalArgumentException("Unsupported value type: " + valueType.getName());
-                    }
-                }
-
-                // Se não for a última chave, continue descendo na estrutura
-                if (!temp.containsKey(currentKey) || temp.get(currentKey).getValueType() != JsonValue.ValueType.OBJECT) {
-                    throw new IllegalArgumentException("Invalid path: " + currentKey);
-                }
-                temp = temp.getJsonObject(currentKey);
+                payloads.add(payload);
             }
+
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error(e.getMessage());
         }
-        return null; // Retorna null se o valor não for encontrado ou houver erro
+
+        return payloads;
     }
 }

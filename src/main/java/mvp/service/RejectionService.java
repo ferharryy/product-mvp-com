@@ -26,13 +26,8 @@ public class RejectionService {
     @Inject
     SupabaseUtils supabaseUtils;
 
-    public void handleRejection(String webhookPayload) {
+    public void handleRejection(String workItemId, String comment) {
         try {
-            // Converte a String JSON em JsonObject
-            JsonObject jsonObject = parsePayload(webhookPayload);
-
-            int workItemId = jsonObject.getJsonObject("resource").getInt("id");
-            String comment = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.History");
 
             // Limpeza do comentário
             String cleanComment = UtilsService.removeHtmlTags(comment);
