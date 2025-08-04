@@ -1,7 +1,5 @@
 package mvp.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -9,8 +7,6 @@ import jakarta.inject.Inject;
 import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
-import jakarta.json.JsonValue;
-import mvp.resources.JiraResource;
 import mvp.utils.OllamaUtils;
 import mvp.utils.SupabaseUtils;
 import mvp.utils.UtilsService;
