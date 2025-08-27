@@ -11,6 +11,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import mvp.service.AuthService;
+import org.jboss.logging.Logger;
 
 import java.time.Duration;
 import java.util.Map;
@@ -24,9 +25,12 @@ public class AuthResource {
     @Inject
     AuthService authService;
 
+    private static final Logger LOG = Logger.getLogger(AuthResource.class);
+
     @POST
     @Path("/login")
     public Response login(Map<String, String> json) {
+        LOG.infof(">>> Requisição de login recebida");
         String username = json.get("username");
         String password = json.get("password");
 
