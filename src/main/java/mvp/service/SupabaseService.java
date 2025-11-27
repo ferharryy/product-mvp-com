@@ -131,6 +131,10 @@ public class SupabaseService {
         return getFirst(sendGetRequest(supabaseUrl + "/rest/v1/companies?id=eq." + id));
     }
 
+    public JsonObject getCompanyByURL(String url) {
+        return getFirst(sendGetRequest(supabaseUrl + "/rest/v1/companies?url=eq." + url));
+    }
+
     public Response updateCompany(Long id, String json) {
         return sendRequest("PATCH", supabaseUrl + "/rest/v1/companies?id=eq." + id, json);
     }
@@ -231,6 +235,10 @@ public class SupabaseService {
 
     public JsonObject getProjectById(Long id) {
         return getFirst(sendGetRequest(supabaseUrl + "/rest/v1/project?id=eq." + id));
+    }
+
+    public JsonObject getProjectByCompanyIdAndKey(Long companyId, String key) {
+        return getFirst(sendGetRequest(supabaseUrl + "/rest/v1/project?key=eq." + key + "&company_id=eq." + companyId));
     }
 
     public Response updateProject(Long id, String json) {

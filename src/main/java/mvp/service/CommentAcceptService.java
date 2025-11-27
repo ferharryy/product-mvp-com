@@ -25,7 +25,7 @@ public class CommentAcceptService {
     @Inject
     OllamaUtils ollamaUtils;
 
-    public void processComment(String workItemId, String comment, String plataform, String url) {
+    public void processComment(String workItemId, String project, String comment, String plataform, String url) {
         try {
             JsonObject finalMessage = SupabaseUtils.hasFinalAssistantMessage(workItemId);
             int interaction = 0;
@@ -54,7 +54,11 @@ public class CommentAcceptService {
                 return;
             }
 
-            if (!SupabaseUtils.saveUserMessage(workItemId, messageToChat, interaction, interactionOrder)){
+            String key = project.split("-")[0];
+            Long companyId = SupabaseUtils.getCompanyByURL(url);
+            Long projectId = SupabaseUtils.getProjectByCompanyIdAndKey(companyId, key);
+
+            if (!SupabaseUtils.saveUserMessage(workItemId, messageToChat, interaction, interactionOrder, companyId, projectId )){
                 return;
             }
 

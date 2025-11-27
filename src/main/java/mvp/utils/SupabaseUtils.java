@@ -51,7 +51,7 @@ public class SupabaseUtils {
         return supabaseService.getMessagesByWorkItemId(workItemId);
     }
 
-    public static boolean saveUserMessage(String workItemId, String message, int interaction, int interactionOrder) {
+    public static boolean saveUserMessage(String workItemId, String message, int interaction, int interactionOrder, Long companyId, Long projectId) {
         JsonObject payload = Json.createObjectBuilder()
                 .add("message", message)
                 .add("created_at", java.time.Instant.now().toString())
@@ -59,10 +59,22 @@ public class SupabaseUtils {
                 .add("sender", "user")
                 .add("interaction_message_processing", interaction)
                 .add("interaction_order", interactionOrder)
+                .add("company_id", companyId)
+                .add("project_id", projectId)
                 .build();
 
         Response response = supabaseService.saveMessage(payload.toString());
         return response.getStatus() == Response.Status.CREATED.getStatusCode();
+    }
+
+    public static Long getCompanyByURL(String url){
+        JsonObject json = supabaseService.getCompanyByURL(url);
+        return json.getJsonNumber("id").longValue();
+    }
+
+    public static Long getProjectByCompanyIdAndKey(Long companyId, String key){
+        JsonObject json = supabaseService.getProjectByCompanyIdAndKey(companyId, key);
+        return json.getJsonNumber("id").longValue();
     }
 
     public static boolean saveAssistantMessage(String workItemId, String message, int interaction, int interactionOrder) {

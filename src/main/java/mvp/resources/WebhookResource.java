@@ -1,181 +1,178 @@
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
+import jakarta.json.Json;
 import jakarta.json.JsonObject;
-import jakarta.json.JsonValue;
+import jakarta.json.JsonObjectBuilder;
+import jakarta.json.JsonReader;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import mvp.service.CommentAcceptService;
-import mvp.service.RejectionService;
+
+import mvp.service.SupabaseService;
 import mvp.service.WorkItemService;
-import mvp.utils.UtilsService;
-import org.slf4j.LoggerFactory;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.media.Content;
+import org.eclipse.microprofile.openapi.annotations.media.Schema;
+import org.eclipse.microprofile.openapi.annotations.media.ExampleObject;
+import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 
-import java.util.logging.Logger;
+import org.jboss.logging.Logger;
 
-import static mvp.utils.UtilsService.parsePayload;
+import java.io.StringReader;
+import java.net.URI;
 
 @Path("/webhook")
+@Consumes(MediaType.APPLICATION_JSON)
+@Produces(MediaType.APPLICATION_JSON)
 public class WebhookResource {
 
-    private static final Logger logger = Logger.getLogger(WebhookResource.class.getName());
-    private static final org.slf4j.Logger log = LoggerFactory.getLogger(WebhookResource.class);
+    private static final Logger LOG = Logger.getLogger(WebhookResource.class);
 
     @Inject
-    RejectionService rejectionService;
-
-    @Inject
-    CommentAcceptService commentAcceptService;
+    SupabaseService supabaseService;
 
     @Inject
     WorkItemService workItemService;
 
+    // ---------------------------------------------------------------
+    //  ENDPOINT EPIC DO JIRA
+    // ---------------------------------------------------------------
     @POST
-    @Path("/workitem")
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Response handleWebhook(String webhookPayload) {
+    @Path("/epic")
+    @Operation(
+            summary = "Recebe webhook de épico do Jira",
+            description = "Processa criação ou atualização de épicos enviados via webhook do Jira."
+    )
+    @APIResponse(
+            responseCode = "202",
+            description = "Webhook de épico recebido e processamento iniciado"
+    )
+    @APIResponse(
+            responseCode = "400",
+            description = "Payload JSON inválido",
+            content = @Content(
+                    mediaType = MediaType.APPLICATION_JSON,
+                    schema = @Schema(example = "{ \"error\": \"Invalid JSON\" }")
+            )
+    )
+    public Response handleEpic(
+            @RequestBody(
+                    required = true,
+                    description = "Payload bruto enviado pelo Jira",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON,
+                            examples = {
+                                    @ExampleObject(
+                                            name = "Exemplo de payload enviado pelo Jira",
+                                            value =
+                                                    """
+                                                    {
+                                                      "issue": {
+                                                        "key": "EPIC-123",
+                                                        "self": "https://meu-jira.com/rest/api/2/issue/EPIC-123",
+                                                        "fields": {
+                                                          "summary": "Nome do épico",
+                                                          "description": "Descrição completa do épico"
+                                                        }
+                                                      }
+                                                    }
+                                                    """
+                                    )
+                            }
+                    )
+            )
+            String webhookPayload
+    ) {
 
-        // Responde rapidamente ao Azure DevOps
-        Response acceptedResponse = Response.accepted().build();
+        LOG.info("Recebendo Épico do Jira: " + webhookPayload);
 
-        // Processa a carga útil em segundo plano
-        new Thread(() -> {
-            try {
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode rootNode = mapper.readTree(webhookPayload);
+        supabaseService.saveLog(
+                "INFO",
+                "Recebendo Épico do Jira",
+                Json.createObjectBuilder().add("payload_raw", webhookPayload).build()
+        );
 
-                // Extrai informações do payload
-                JsonNode fields = rootNode.get("resource").get("fields");
-                String description = UtilsService.removeHtmlTags(fields.get("System.Description").asText());
-                String title = fields.get("System.Title").asText();
-                String type = fields.get("System.WorkItemType").asText();
-                String workItemId = rootNode.get("resource").get("id").asText();
+        // -------------------------------------------------------
+        // 1) VALIDAÇÃO DE JSON MALFORMADO
+        // -------------------------------------------------------
+        JsonObject json;
+        try {
+            JsonReader reader = Json.createReader(new StringReader(webhookPayload));
+            json = reader.readObject();
+        } catch (Exception e) {
+            LOG.warn("JSON inválido recebido no webhook de épico: " + e.getMessage());
 
-                workItemService.processWebhook(workItemId, title, description, "1", "");
-            }catch (Exception e){
-                e.printStackTrace();
-            }
-        }).start();
+            supabaseService.saveLog(
+                    "ERROR",
+                    "JSON inválido no webhook de épico",
+                    Json.createObjectBuilder().add("error", e.getMessage()).build()
+            );
 
-        return acceptedResponse;
-    }
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Json.createObjectBuilder()
+                            .add("error", "Invalid JSON")
+                            .add("details", e.getMessage())
+                            .build())
+                    .build();
+        }
 
-    @POST
-    @Path("/comment")
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Response handleWebhookComment(String webhookPayload) {
-
-        // Processa a carga útil em segundo plano
-        new Thread(() -> {
-            JsonObject payload = UtilsService.parsePayload(webhookPayload);
-
-            String workItemId = getJsonValue(payload, "resource.id", String.class);
-            //String[] keysTitle = {"resource", "fields", "System.Title"};
-            //String title =  getNestedJsonValue(payload, keysTitle, String.class);
-            String[] keysComment = {"resource", "fields", "System.History"};
-            String comment = getNestedJsonValue(payload, keysComment, String.class);
-            // Lógica para processar o webhook
-            commentAcceptService.processComment(workItemId, comment, "1", "");
-        }).start();
+        // -------------------------------------------------------
+        // 2) PROCESSAMENTO ASSÍNCRONO
+        // -------------------------------------------------------
+        new Thread(() -> processEpic(json)).start();
 
         return Response.accepted().build();
     }
 
-    @POST
-    @Path("/recuso")
-    @Consumes(MediaType.APPLICATION_JSON)
-    public Response handleWebhookRecuso(String payload) {
-        // Responde rapidamente ao Azure DevOps
-        Response acceptedResponse = Response.accepted().build();
+    // ---------------------------------------------------------------
+    //  MÉTODO INTERNO: PROCESSAMENTO DO EPIC
+    // ---------------------------------------------------------------
+    private void processEpic(JsonObject jsonPayload) {
+        String key = "N/A";
 
-        // Processa a carga útil em segundo plano
-        new Thread(() -> {
-            JsonObject jsonObject = parsePayload(payload);
-
-            String workItemId = jsonObject.getJsonObject("resource").getString("id");
-            String comment = jsonObject.getJsonObject("resource").getJsonObject("fields").getString("System.History");
-
-            // Lógica para processar o webhook
-            rejectionService.handleRejection(workItemId, comment);
-        }).start();
-
-        return acceptedResponse;
-    }
-
-    private <T> T getNestedJsonValue(JsonObject json, String[] keys, Class<T> valueType) {
         try {
-            JsonObject temp = json;
-            // Percorre os níveis até o penúltimo
-            for (int i = 0; i < keys.length - 1; i++) {
-                temp = temp.getJsonObject(keys[i]);
-                if (temp == null) {
-                    throw new IllegalArgumentException("Invalid key: " + keys[i]);
-                }
-            }
-            // Pega o valor final
-            String finalKey = keys[keys.length - 1];
-            if (!temp.containsKey(finalKey)) {
-                throw new IllegalArgumentException("Invalid key: " + finalKey);
-            }
-            if (valueType == String.class) {
-                return valueType.cast(temp.getString(finalKey, null));
-            } else if (valueType == Integer.class) {
-                return valueType.cast(temp.getInt(finalKey, -1));
-            } else if (valueType == Boolean.class) {
-                return valueType.cast(temp.getBoolean(finalKey, false));
-            } else if (valueType == JsonObject.class) {
-                return valueType.cast(temp.getJsonObject(finalKey));
-            } else {
-                throw new IllegalArgumentException("Unsupported value type: " + valueType.getName());
-            }
+
+            JsonObject issue = jsonPayload.getJsonObject("issue");
+            JsonObject fields = issue.getJsonObject("fields");
+
+            key = issue.getString("key");
+            String title = fields.getString("summary", "Sem título");
+            String description = fields.getString("description", "Sem descrição");
+            String url = issue.getString("self");
+
+            URI uri = new URI(url);
+            String baseUrl = uri.getScheme() + "://" + uri.getHost();
+
+            workItemService.processWebhook("", key, title, description, "0", baseUrl);
+
+            supabaseService.saveLog(
+                    "INFO",
+                    "Épico processado com sucesso",
+                    Json.createObjectBuilder()
+                            .add("issue_key", key)
+                            .add("title", title)
+                            .build()
+            );
+
         } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
+            LOG.error("Erro ao processar épico do Jira (key=" + key + "): " + e.getMessage(), e);
 
-    private <T> T getJsonValue(JsonObject json, String path, Class<T> valueType) {
-        try {
-            // Processa o caminho diretamente, sem dividir no ponto
-            String[] keys = path.split("\\.");
-            JsonObject temp = json;
+            JsonObjectBuilder err = Json.createObjectBuilder()
+                    .add("issue_key", key)
+                    .add("error_message", e.getMessage());
 
-            for (int i = 0; i < keys.length; i++) {
-                String currentKey = keys[i];
-
-                // Para a última chave, retorna o valor diretamente
-                if (i == keys.length - 1) {
-                    if (!temp.containsKey(currentKey)) {
-                        throw new IllegalArgumentException("Invalid path: " + currentKey);
-                    }
-
-                    if (valueType == String.class) {
-                        return valueType.cast(temp.getString(currentKey, null));
-                    } else if (valueType == Integer.class) {
-                        return valueType.cast(temp.getInt(currentKey, -1));
-                    } else if (valueType == Double.class) {
-                        return valueType.cast(temp.getJsonNumber(currentKey).doubleValue());
-                    } else if (valueType == Boolean.class) {
-                        return valueType.cast(temp.getBoolean(currentKey, false));
-                    } else if (valueType == JsonObject.class) {
-                        return valueType.cast(temp.getJsonObject(currentKey));
-                    } else {
-                        throw new IllegalArgumentException("Unsupported value type: " + valueType.getName());
-                    }
-                }
-
-                // Se não for a última chave, continue descendo na estrutura
-                if (!temp.containsKey(currentKey) || temp.get(currentKey).getValueType() != JsonValue.ValueType.OBJECT) {
-                    throw new IllegalArgumentException("Invalid path: " + currentKey);
-                }
-                temp = temp.getJsonObject(currentKey);
+            if (e.getCause() != null) {
+                err.add("cause", e.getCause().getMessage());
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+
+            supabaseService.saveLog(
+                    "ERROR",
+                    "Erro ao processar épico",
+                    err.build()
+            );
         }
-        return null; // Retorna null se o valor não for encontrado ou houver erro
     }
 }

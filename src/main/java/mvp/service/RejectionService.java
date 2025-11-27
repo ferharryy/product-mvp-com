@@ -42,7 +42,7 @@ public class RejectionService {
             interactionOrder = finalMessage != null ? finalMessage.getJsonNumber("interaction_order").intValue() : 0;
 
             // Salva a mensagem no Supabase
-            boolean saveUserMessage = supabaseUtils.saveUserMessage(workItemId, cleanComment, interaction, interactionOrder);
+            boolean saveUserMessage = false; //supabaseUtils.saveUserMessage(workItemId, cleanComment, interaction, interactionOrder);
 
             if (!saveUserMessage) {
                 return;

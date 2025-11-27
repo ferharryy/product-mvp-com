@@ -29,7 +29,7 @@ public class WorkItemService {
     @Inject
     SupabaseUtils supabaseUtils;  // Usando a nova classe utilitária
 
-    public Response processWebhook(String workItemId, String title, String description, String plataform, String url) {
+    public Response processWebhook(String workItemId, String project, String title, String description, String plataform, String url) {
         try {
             // Parse do JSON recebido
 
@@ -48,7 +48,12 @@ public class WorkItemService {
                     ? nextInteraction.getString("prompt") + " " + description
                     : description;
 
-            if (!SupabaseUtils.saveUserMessage(workItemId, message, 1, 1)){
+            String key = project.split("-")[0];
+            Long companyId = SupabaseUtils.getCompanyByURL(url);
+            Long projectId = SupabaseUtils.getProjectByCompanyIdAndKey(companyId, key);
+
+
+            if (!SupabaseUtils.saveUserMessage(workItemId, message, 1, 1, companyId, projectId)){
                 return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("Failed to save user message").build();
             }
             JsonArrayBuilder messagesArrayBuilder = Json.createArrayBuilder()
